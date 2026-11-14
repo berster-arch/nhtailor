@@ -1,0 +1,112 @@
+# Nonaktifkan directory listing agar isi folder tidak dapat dijelajahi.
+Options -Indexes
+# Aktifkan aturan berikut hanya jika modul mod_rewrite tersedia.
+<IfModule mod_rewrite.c>
+    # Izinkan symlink yang dibutuhkan mod_rewrite pada sebagian konfigurasi Apache.
+    Options +FollowSymLinks
+    # Nonaktifkan MultiViews agar Apache tidak memilih file berdasarkan ekstensi secara otomatis.
+    Options -MultiViews
+    # Aktifkan mesin rewrite URL.
+    RewriteEngine On
+
+    # Tolak akses web ke dotfiles seperti .env dan folder tersembunyi seperti .git.
+    RewriteRule (^|/)\. - [F,L]
+
+    # Lewati redirect HTTPS untuk localhost dan alamat IP lokal agar XAMPP tetap mudah digunakan.
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$ [NC]
+    # Terapkan redirect kanonis untuk domain www yang belum memakai HTTPS.
+    RewriteCond %{HTTPS} !=on
+    # Cocokkan domain yang diawali www dan simpan nama domain tanpa www.
+    RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+    # Alihkan sekaligus ke HTTPS dan domain tanpa www, dengan path tetap sama.
+    RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L,NE]
+
+    # Lewati redirect HTTPS untuk localhost dan alamat IP lokal.
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$ [NC]
+    # Redirect domain produksi yang belum memakai HTTPS.
+    RewriteCond %{HTTPS} !=on
+    # Pastikan host belum memiliki awalan www.
+    RewriteCond %{HTTP_HOST} !^www\. [NC]
+    # Alihkan permintaan ke HTTPS tanpa mengubah hostname atau path.
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L,NE]
+
+    # Lewati redirect www untuk localhost dan alamat IP lokal.
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$ [NC]
+    # Lakukan redirect www hanya jika HTTPS sudah aktif.
+    RewriteCond %{HTTPS} =on
+    # Cocokkan dan tangkap hostname tanpa awalan www.
+    RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+    # Alihkan ke hostname kanonis tanpa www sambil mempertahankan path.
+    RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L,NE]
+
+    # Periksa permintaan asli browser agar redirect tidak berulang pada rewrite internal.
+    RewriteCond %{THE_REQUEST} \s/+(.*/)?index\.php(?:\?|\s) [NC]
+    # Hilangkan index.php dan arahkan ke direktori asal, termasuk root website.
+    RewriteRule ^(.*\/)?index\.php$ /%1 [R=301,L,NE]
+
+    # Cocokkan hanya permintaan browser langsung ke file PHP yang berakhiran .php.
+    RewriteCond %{THE_REQUEST} \s/+(.+?)\.php(?:\?|\s) [NC]
+    # Redirect permanen ke path URL asli yang sama tanpa ekstensi PHP.
+    RewriteRule ^.+?\.php$ /%1 [R=301,L,NE]
+
+    # Jangan rewrite URL jika sudah ada file fisik yang cocok.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    # Jangan rewrite URL jika sudah ada folder fisik yang cocok.
+    RewriteCond %{REQUEST_FILENAME} !-d
+    # Pastikan file PHP tujuan benar-benar tersedia.
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    # Layani URL tanpa ekstensi dengan file PHP yang cocok secara internal.
+    RewriteRule ^(.+?)/?$ $1.php [L]
+# Akhiri blok aturan mod_rewrite.
+</IfModule>
+
+# Aktifkan perlindungan file sensitif hanya jika modul otorisasi Apache tersedia.
+<IfModule mod_authz_core.c>
+    # Tolak dotfiles, file konfigurasi, kredensial, dan file cadangan dari akses web.
+    <FilesMatch "(^\.|^(?:koneksi|fonnte_config)\.php$|(?:\.env(?:\..*)?|composer\.(?:json|lock)|package(?:-lock)?\.json|.*\.(?:sql|bak|backup|old|log))$)">
+        # Larang semua pengunjung mengakses file yang cocok.
+        Require all denied
+    # Akhiri daftar pola file yang dilindungi.
+    </FilesMatch>
+# Akhiri blok perlindungan file sensitif.
+</IfModule>
+
+# Aktifkan masa berlaku cache aset jika modul mod_expires tersedia.
+<IfModule mod_expires.c>
+    # Aktifkan header Expires untuk browser.
+    ExpiresActive On
+    # Cache gambar JPEG selama satu tahun.
+    ExpiresByType image/jpeg "access plus 1 year"
+    # Cache gambar PNG selama satu tahun.
+    ExpiresByType image/png "access plus 1 year"
+    # Cache gambar GIF selama satu tahun.
+    ExpiresByType image/gif "access plus 1 year"
+    # Cache gambar WebP selama satu tahun.
+    ExpiresByType image/webp "access plus 1 year"
+    # Cache gambar SVG selama satu tahun.
+    ExpiresByType image/svg+xml "access plus 1 year"
+    # Cache stylesheet CSS selama satu bulan.
+    ExpiresByType text/css "access plus 1 month"
+    # Cache file JavaScript selama satu bulan.
+    ExpiresByType application/javascript "access plus 1 month"
+    # Cache file JavaScript dengan MIME type alternatif selama satu bulan.
+    ExpiresByType text/javascript "access plus 1 month"
+# Akhiri blok masa berlaku cache.
+</IfModule>
+
+# Atur cache alternatif jika modul mod_headers tersedia.
+<IfModule mod_headers.c>
+    # Cache gambar hingga 30 hari.
+    <FilesMatch "\.(?:jpe?g|png|gif|webp|svg|ico)$">
+        # Kirim kebijakan cache publik selama 30 hari.
+        Header set Cache-Control "public, max-age=2592000"
+    # Akhiri pola aset gambar.
+    </FilesMatch>
+    # Cocokkan file stylesheet dan JavaScript.
+    <FilesMatch "\.(?:css|js)$">
+        # Kirim kebijakan cache publik selama 7 hari.
+        Header set Cache-Control "public, max-age=604800"
+    # Akhiri pola aset CSS dan JavaScript.
+    </FilesMatch>
+# Akhiri blok header cache.
+</IfModule>
